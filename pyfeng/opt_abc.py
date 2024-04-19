@@ -8,7 +8,7 @@ class OptABC(abc.ABC):
     sigma, intr, divr = None, 0.0, 0.0
     is_fwd = False
 
-    IMPVOL_TOL = 1e-10
+    IMPVOL_TOL = 1e-3
     IMPVOL_MAXVOL = 99.99
 
     def __init__(self, sigma, intr=0.0, divr=0.0, is_fwd=False):
@@ -114,7 +114,7 @@ class OptABC(abc.ABC):
         price_std = price / df / fwd  # forward price / fwd
 
         model = copy.copy(self)
-        model.sigma = 1e-64
+        model.sigma = 1e-8
         p_min = model.price(kk, 1, texp, cp)
         model.sigma = self.IMPVOL_MAXVOL
         p_max = model.price(kk, 1, texp, cp)
