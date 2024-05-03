@@ -14,7 +14,7 @@ from . import rheston
 
 
 class FftABC(opt.OptABC, abc.ABC):
-    n_x = 2**12  # number of grid. power of 2 for FFT
+    n_x = 2**10 # number of grid. power of 2 for FFT
     x_lim = 200  # integratin limit
 
     @abc.abstractmethod
@@ -42,7 +42,7 @@ class FftABC(opt.OptABC, abc.ABC):
         Returns:
 
         """
-        return self.mgf_logprice(1j*x, texp)
+        return self.mgf_logprice(x, texp)
 
     def price(self, strike, spot, texp, cp=1):
         fwd, df, divf = self._fwd_factor(spot, texp)
@@ -52,7 +52,8 @@ class FftABC(opt.OptABC, abc.ABC):
 
         dx = self.x_lim/self.n_x
         xx = np.arange(self.n_x + 1)[:, None]*dx  # the final value x_lim is excluded
-        yy = (np.exp(-log_kk*xx*1j)*self.mgf_logprice(xx*1j + 0.5, texp)).real/(xx**2 + 0.25)
+        # yy = (np.exp(-log_kk*xx*1j)*self.mgf_logprice(xx*1j + 0.5, texp)).real/(xx**2 + 0.25)
+        yy = (np.exp(-log_kk*xx*1j)*self.charfunc_logprice(xx - 0.5j, texp)).real/(xx ** 2 + 0.25)
         int_val = spint.simpson(yy, dx=dx, axis=0)
         if np.isscalar(kk):
             int_val = int_val[0]
@@ -78,8 +79,8 @@ class FftABC(opt.OptABC, abc.ABC):
         b = self.n_x*dk/2
         ks = -b + dk*np.arange(self.n_x)
 
-        integrand = np.exp(-1j*b*xx)*self.mgf_logprice(xx*1j + 0.5, texp)/(xx**2 + 0.25)*weight
-        # CF: integrand = np.exp(-1j*b*xx)*self.cf(xx - 0.5j, texp)*1/(xx**2 + 0.25)*weight
+        # integrand = np.exp(-1j*b*xx)*self.mgf_logprice(xx*1j + 0.5, texp)/(xx**2 + 0.25)*weight
+        integrand = np.exp(-1j*b*xx)*self.charfunc_logprice(xx - 0.5j, texp)/(xx**2 + 0.25)*weight
         integral_value = (self.n_x/np.pi)*spfft.ifft(integrand).real
 
         obj = spinterp.interp1d(ks, integral_value, kind='cubic')
@@ -277,7 +278,7 @@ class RoughHestonFft(rheston.RoughHestonABC, FftABC):
             x: value of the solution function
 
         """
-        return (1/2) * (pow(a,2) - a) + self.mr * (a * self.rho * self.vov - 1) * x + pow(self.mr * self.vov, 2) * pow(x,2) / 2
+        return (-1/2) * (pow(a,2) + 1j * a) + self.mr * (1j * a * self.rho * self.vov - 1) * x + pow(self.mr * self.vov, 2) * pow(x,2) / 2
     
     def Ih(self,r,t,a,hh):
         """
@@ -290,6 +291,7 @@ class RoughHestonFft(rheston.RoughHestonABC, FftABC):
         """
         grid = np.arange(0,t,self.delta)
         Ihrs = 0 + 0j
+
         for s in np.arange(0,t,self.delta):
             Ihrs += pow(t - s,r - 1) * hh[int(s//self.delta)] * self.delta
         return Ihrs / spsp.gamma(r)
@@ -312,7 +314,7 @@ class RoughHestonFft(rheston.RoughHestonABC, FftABC):
         """
         delta = 1/100
         self.delta = delta
-        
+
         LL = uu
         for i in range(0,len(uu)):
             k = int(texp/delta)
@@ -325,7 +327,7 @@ class RoughHestonFft(rheston.RoughHestonABC, FftABC):
                 h_hat_p[j] = np.dot(self.b_kp1(j-1,delta), F_a_h_hat[0:j])
                 h_hat[j] = np.dot(self.a_kp1(j-1,delta),F_a_h_hat[0:j]) + self.a_j_kp1(j,delta,j + 1) * self.F(uu[i],h_hat_p[j])
             LL[i] = self.theta * self.mr * self.Ih(1,texp,uu[i],h_hat) + self.sigma * self.Ih(1 - self.alpha,texp,uu[i],h_hat)
-       
+
         return np.exp(LL)
     
     '''
